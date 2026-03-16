@@ -10,6 +10,10 @@ You will receive real-time trade data from a public WebSocket stream and compute
 
 ---
 
+
+
+
+
 ## Data Source
 
 Connect to the following WebSocket stream:
