@@ -1,0 +1,6 @@
+@RealtimeMarketData.Api_HostAddress = http://localhost:5163
+
+GET {{RealtimeMarketData.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

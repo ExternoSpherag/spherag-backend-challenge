@@ -1,0 +1,42 @@
+<Solution>
+  <Folder Name="/00 - ItemsSolution/">
+    <File Path=".dockerignore" />
+    <File Path=".gitignore" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="nuget.config" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/01- Api/">
+    <Project Path="src/RealtimeMarketData.Api/RealtimeMarketData.Api.csproj" />
+  </Folder>
+  <Folder Name="/02 - Application/">
+    <Project Path="src/RealTimeMarketData.Application/RealtimeMarketData.Application.csproj" />
+  </Folder>
+  <Folder Name="/03 - Domain/">
+    <Project Path="src/RealtimeMarketData.Domain/RealtimeMarketData.Domain.csproj" />
+  </Folder>
+  <Folder Name="/04 - Infrastructure/">
+    <Project Path="src/RealtimeMarketData.Infrastructure/RealtimeMarketData.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/Docs/">
+    <File Path="docs/ARCHITECTURE.md" />
+    <File Path="docs/DEVELOPMENT-GUIDELINES.md" />
+    <File Path="docs/IMPLEMENTATION-FLOW.md" />
+  </Folder>
+  <Folder Name="/Docs/User Stories/">
+    <File Path="docs/user-stories/US-00-bootstrap-template.md" />
+    <File Path="docs/user-stories/US-01-binance-websocket-ingestion.md" />
+    <File Path="docs/user-stories/US-02-aggregate-5-second-windows.md" />
+    <File Path="docs/user-stories/US-03-persist-aggregated-data.md" />
+    <File Path="docs/user-stories/US-04-generate-alerts-over-5-percent.md" />
+    <File Path="docs/user-stories/US-05-get-prices-api.md" />
+    <File Path="docs/user-stories/US-06-resilience-and-throughput.md" />
+    <File Path="docs/user-stories/US-07-test-coverage.md" />
+    <File Path="docs/user-stories/US-08-documentation-and-delivery.md" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/RealtimeMarketData.Application.Tests/RealtimeMarketData.Application.Tests.csproj" />
+    <Project Path="tests/RealtimeMarketData.Domain.Tests/RealtimeMarketData.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
