@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="Npgsql" Version="10.0.0" />
+    <PackageReference Include="Testcontainers" Version="4.8.1" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.8.1" />
+    <PackageReference Include="xunit" Version="2.9.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BinanceIngestionService\src\BinanceIngestionService.Application\BinanceIngestionService.Application.csproj" />
+    <ProjectReference Include="..\BinanceIngestionService\src\BinanceIngestionService.Infrastructure\BinanceIngestionService.Infrastructure.csproj" />
+    <ProjectReference Include="..\BinanceIngestionService\src\BinanceIngestionService.Worker\BinanceIngestionService.Worker.csproj" />
+    <ProjectReference Include="..\AgregadorRegistros\src\PosicionesConsumer.Application\PosicionesConsumer.Application.csproj" />
+    <ProjectReference Include="..\AgregadorRegistros\src\PosicionesConsumer.Infrastructure\PosicionesConsumer.Infrastructure.csproj" />
+    <ProjectReference Include="..\AgregadorRegistros\src\PosicionesConsumer.Worker\PosicionesConsumer.Worker.csproj" />
+    <ProjectReference Include="..\AgregadorAlertas\src\AlertConsumer.Application\AlertConsumer.Application.csproj" />
+    <ProjectReference Include="..\AgregadorAlertas\src\AlertConsumer.Infrastructure\AlertConsumer.Infrastructure.csproj" />
+    <ProjectReference Include="..\AgregadorAlertas\src\AlertConsumer.Worker\AlertConsumer.Worker.csproj" />
+  </ItemGroup>
+</Project>
