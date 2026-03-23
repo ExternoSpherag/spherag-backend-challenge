@@ -1,0 +1,128 @@
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: binanceingestionservice-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    container_name: timescaledb_demo
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: demo_user
+      POSTGRES_PASSWORD: demo_pass
+      POSTGRES_DB: demo_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_user -d demo_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./init:/docker-entrypoint-initdb.d
+
+  binance-ingestion-service:
+    build:
+      context: ./BinanceIngestionService
+      dockerfile: Dockerfile
+    container_name: binance-ingestion-service
+    restart: unless-stopped
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  agregador-registros:
+    build:
+      context: ./AgregadorRegistros
+      dockerfile: Dockerfile
+    container_name: agregador-registros
+    restart: unless-stopped
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_QUEUE: trade-persistance
+      RABBITMQ_EXCHANGE: Binance
+      POSTGRES_CONNECTION_STRING: Host=timescaledb;Port=5432;Database=demo_db;Username=demo_user;Password=demo_pass
+      POSTGRES_SCHEMA: public
+      POSTGRES_TABLE: posiciones_agregadas
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  agregador-alertas:
+    build:
+      context: ./AgregadorAlertas
+      dockerfile: Dockerfile
+    container_name: agregador-alertas
+    restart: unless-stopped
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      RABBITMQ_QUEUE: alert-persistance
+      POSTGRES_CONNECTION_STRING: Host=timescaledb;Port=5432;Database=demo_db;Username=demo_user;Password=demo_pass
+      ALERT_THRESHOLD_PERCENTAGE: 5
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      timescaledb:
+        condition: service_healthy
+
+  api-lectura:
+    build:
+      context: ./ApiLectura
+      dockerfile: Dockerfile
+    container_name: api-lectura
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      POSTGRES_CONNECTION_STRING: Host=timescaledb;Port=5432;Database=demo_db;Username=demo_user;Password=demo_pass
+    ports:
+      - "8081:8080"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin_demo
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "8080:80"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+
+volumes:
+  rabbitmq_data:
+  timescale_data:

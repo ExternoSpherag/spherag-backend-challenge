@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="ApiLectura.Application/ApiLectura.Application.csproj" Id="d1e899b9-486b-4186-af4c-c24ee6bb9a7f" />
+  <Project Path="ApiLectura.Domain/ApiLectura.Domain.csproj" Id="a8534d75-b9c8-4664-9554-4bcd57bda836" />
+  <Project Path="ApiLectura.Infrastructure/ApiLectura.Infrastructure.csproj" Id="a8041c5e-24c9-4d4d-af79-02f9ffa252f6" />
+  <Project Path="ApiLectura.Tests/ApiLectura.Tests.csproj" />
+  <Project Path="ApiLectura/ApiLectura.csproj" />
+</Solution>
