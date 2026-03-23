@@ -1,9 +1,11 @@
+using AlertConsumer.Application.Abstractions;
 using AlertConsumer.Infrastructure.Messaging;
 using Microsoft.Extensions.Options;
 
 namespace AlertConsumer.Worker;
 
 public class AlertConsumerWorker(
+    ITradeSummarySnapshotInitializer snapshotInitializer,
     RabbitMqTradeSummaryConsumer consumer,
     IOptions<WorkerStartupOptions> startupOptions,
     ILogger<AlertConsumerWorker> logger) : BackgroundService
@@ -19,6 +21,7 @@ public class AlertConsumerWorker(
                 startupDelay.TotalSeconds);
 
             await Task.Delay(startupDelay, stoppingToken);
+            await snapshotInitializer.InitializeAsync(stoppingToken);
 
             await consumer.RunAsync(stoppingToken);
         }
@@ -33,4 +36,3 @@ public class AlertConsumerWorker(
         }
     }
 }
-

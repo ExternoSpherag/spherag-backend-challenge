@@ -20,7 +20,16 @@ public class ProcessTradeSummaryUseCase(
             tradeSummary.TimeUtc,
             tradeSummary.AveragePrice);
 
-        await tradeSummaryRepository.SaveAsync(tradeSummary, cancellationToken);
+        var inserted = await tradeSummaryRepository.SaveAsync(tradeSummary, cancellationToken);
+
+        if (!inserted)
+        {
+            logger.LogWarning(
+                "Duplicate trade summary detected for {Symbol} at {TimeUtc}. It was ignored.",
+                tradeSummary.Symbol,
+                tradeSummary.TimeUtc);
+            return;
+        }
 
         logger.LogInformation(
             "Trade summary for {Symbol} persisted successfully.",

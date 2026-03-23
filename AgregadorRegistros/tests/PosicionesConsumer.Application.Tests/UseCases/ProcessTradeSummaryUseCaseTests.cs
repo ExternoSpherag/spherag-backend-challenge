@@ -16,6 +16,7 @@ public class ProcessTradeSummaryUseCaseTests
         var logger = Substitute.For<ILogger<ProcessTradeSummaryUseCase>>();
         var useCase = new ProcessTradeSummaryUseCase(repository, logger);
         var tradeSummary = CreateTradeSummary();
+        repository.SaveAsync(tradeSummary, CancellationToken.None).Returns(Task.FromResult(true));
 
         await useCase.ProcessAsync(tradeSummary, CancellationToken.None);
 
@@ -36,6 +37,20 @@ public class ProcessTradeSummaryUseCaseTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => useCase.ProcessAsync(tradeSummary, CancellationToken.None));
 
         await repository.DidNotReceive().SaveAsync(Arg.Any<TradeSummary>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenTradeSummaryIsDuplicate_DoesNotFail()
+    {
+        var repository = Substitute.For<ITradeSummaryRepository>();
+        var logger = Substitute.For<ILogger<ProcessTradeSummaryUseCase>>();
+        var useCase = new ProcessTradeSummaryUseCase(repository, logger);
+        var tradeSummary = CreateTradeSummary();
+        repository.SaveAsync(tradeSummary, CancellationToken.None).Returns(Task.FromResult(false));
+
+        await useCase.ProcessAsync(tradeSummary, CancellationToken.None);
+
+        await repository.Received(1).SaveAsync(tradeSummary, CancellationToken.None);
     }
 
     [Fact]

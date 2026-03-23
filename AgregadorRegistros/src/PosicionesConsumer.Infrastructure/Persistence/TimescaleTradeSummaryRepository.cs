@@ -11,7 +11,7 @@ public class TimescaleTradeSummaryRepository(
     PostgresOptions postgresOptions,
     ILogger<TimescaleTradeSummaryRepository> logger) : ITradeSummaryRepository
 {
-    public async Task SaveAsync(TradeSummary tradeSummary, CancellationToken cancellationToken)
+    public async Task<bool> SaveAsync(TradeSummary tradeSummary, CancellationToken cancellationToken)
     {
         var qualifiedTableName = $"{QuoteIdentifier(postgresOptions.Schema)}.{QuoteIdentifier(postgresOptions.TableName)}";
 
@@ -19,7 +19,8 @@ public class TimescaleTradeSummaryRepository(
                            INSERT INTO {qualifiedTableName}
                                (time_utc, symbol, count, average_price, total_quantity, window_start, window_end)
                            VALUES
-                               (@time_utc, @symbol, @count, @average_price, @total_quantity, @window_start, @window_end);
+                               (@time_utc, @symbol, @count, @average_price, @total_quantity, @window_start, @window_end)
+                           ON CONFLICT (symbol, time_utc) DO NOTHING;
                            """;
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
@@ -35,7 +36,8 @@ public class TimescaleTradeSummaryRepository(
 
         try
         {
-            await command.ExecuteNonQueryAsync(cancellationToken);
+            var affectedRows = await command.ExecuteNonQueryAsync(cancellationToken);
+            return affectedRows > 0;
         }
         catch (PostgresException ex)
         {

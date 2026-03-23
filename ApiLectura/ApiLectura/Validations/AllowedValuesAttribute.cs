@@ -23,9 +23,14 @@ public class AllowedValuesAttribute(params string[] allowed) : ValidationAttribu
     /// valid symbol; otherwise, returns a ValidationResult with an error message.</returns>
     protected override ValidationResult? IsValid(object? value, ValidationContext validationContext)
     {
+        if (value is null)
+        {
+            return ValidationResult.Success;
+        }
+
         if (value is not string symbol || string.IsNullOrWhiteSpace(symbol))
         {
-            return new ValidationResult("El symbol es obligatorio.");
+            return new ValidationResult("El symbol no es válido.");
         }
 
         return _allowed.Contains(symbol)

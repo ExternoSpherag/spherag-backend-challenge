@@ -16,11 +16,14 @@ public class TradeStreamOrchestrator(
     ILogger<TradeStreamOrchestrator> logger)
 {
     private readonly TimeSpan _window = TimeSpan.FromSeconds(Math.Max(1, batchingOptions.Value.WindowSeconds));
+    private readonly TimeSpan _allowedLateness = TimeSpan.FromSeconds(Math.Max(0, batchingOptions.Value.AllowedLatenessSeconds));
 
     public async Task RunAsync(CancellationToken cancellationToken)
     {
-        var trades = new List<TradeRow>();
-        DateTimeOffset? currentWindowStart = null;
+        var windows = new SortedDictionary<DateTimeOffset, List<TradeRow>>();
+        DateTimeOffset? nextWindowStartToFlush = null;
+        DateTimeOffset? lastFlushedWindowStart = null;
+        DateTimeOffset? latestObservedWindowStart = null;
 
         await using var enumerator = streamClient.ReadMessagesAsync(cancellationToken).GetAsyncEnumerator(cancellationToken);
         Task<bool>? nextMessageTask = null;
@@ -29,25 +32,25 @@ public class TradeStreamOrchestrator(
         {
             nextMessageTask ??= enumerator.MoveNextAsync().AsTask();
 
-            if (currentWindowStart is null || trades.Count == 0)
+            if (nextWindowStartToFlush is null)
             {
                 if (!await nextMessageTask)
                 {
                     break;
                 }
 
-                await ProcessMessageAsync(enumerator.Current, trades, cancellationToken);
+                ProcessMessage(enumerator.Current);
                 nextMessageTask = null;
+                await FlushExpiredWindowsAsync(clock.UtcNow, cancellationToken);
                 continue;
             }
 
-            var windowEnd = currentWindowStart.Value.Add(_window);
-            var remaining = windowEnd - clock.UtcNow;
+            var nextFlushAt = nextWindowStartToFlush.Value.Add(_window).Add(_allowedLateness);
+            var remaining = nextFlushAt - clock.UtcNow;
 
             if (remaining <= TimeSpan.Zero)
             {
-                await FlushAsync(trades, currentWindowStart.Value, cancellationToken);
-                currentWindowStart = null;
+                await FlushExpiredWindowsAsync(clock.UtcNow, cancellationToken);
                 continue;
             }
 
@@ -56,8 +59,7 @@ public class TradeStreamOrchestrator(
 
             if (completedTask == delayTask)
             {
-                await FlushAsync(trades, currentWindowStart.Value, cancellationToken);
-                currentWindowStart = null;
+                await FlushExpiredWindowsAsync(clock.UtcNow, cancellationToken);
                 continue;
             }
 
@@ -66,16 +68,15 @@ public class TradeStreamOrchestrator(
                 break;
             }
 
-            await ProcessMessageAsync(enumerator.Current, trades, cancellationToken);
+            ProcessMessage(enumerator.Current);
             nextMessageTask = null;
+            await FlushExpiredWindowsAsync(clock.UtcNow, cancellationToken);
         }
 
-        if (currentWindowStart is not null)
-        {
-            await FlushAsync(trades, currentWindowStart.Value, cancellationToken);
-        }
+        await FlushRemainingWindowsAsync(cancellationToken);
+        return;
 
-        async Task ProcessMessageAsync(string message, List<TradeRow> currentTrades, CancellationToken processCancellationToken)
+        void ProcessMessage(string message)
         {
             if (!parser.TryParse(message, out var trade) || trade is null)
             {
@@ -85,47 +86,99 @@ public class TradeStreamOrchestrator(
 
             var tradeWindowStart = AlignToWindowStart(trade.TradeTimeUtc);
 
-            if (currentWindowStart is null)
-            {
-                currentWindowStart = tradeWindowStart;
-            }
-
-            if (tradeWindowStart > currentWindowStart.Value)
-            {
-                await FlushAsync(currentTrades, currentWindowStart.Value, processCancellationToken);
-                currentWindowStart = tradeWindowStart;
-            }
-            else if (tradeWindowStart < currentWindowStart.Value)
+            if (lastFlushedWindowStart.HasValue && tradeWindowStart <= lastFlushedWindowStart.Value)
             {
                 logger.LogWarning(
-                    "Se descarto un trade fuera de orden. TradeTimeUtc={TradeTimeUtc:O}, WindowStart={WindowStart:O}.",
+                    "Se descarto un trade demasiado tardio para una ventana ya cerrada. TradeTimeUtc={TradeTimeUtc:O}, WindowStart={WindowStart:O}.",
                     trade.TradeTimeUtc,
-                    currentWindowStart.Value);
+                    tradeWindowStart);
                 return;
             }
 
-            currentTrades.Add(trade);
+            if (latestObservedWindowStart.HasValue && tradeWindowStart < latestObservedWindowStart.Value)
+            {
+                logger.LogInformation(
+                    "Se acepto un trade tardio/fuera de orden para la ventana {WindowStart:O}.",
+                    tradeWindowStart);
+            }
+
+            latestObservedWindowStart = latestObservedWindowStart.HasValue && latestObservedWindowStart.Value > tradeWindowStart
+                ? latestObservedWindowStart
+                : tradeWindowStart;
+
+            if (!windows.TryGetValue(tradeWindowStart, out var trades))
+            {
+                trades = [];
+                windows[tradeWindowStart] = trades;
+            }
+
+            if (!nextWindowStartToFlush.HasValue || tradeWindowStart < nextWindowStartToFlush.Value)
+            {
+                nextWindowStartToFlush = tradeWindowStart;
+            }
+
+            trades.Add(trade);
         }
-    }
 
-    private async Task FlushAsync(
-        IReadOnlyCollection<TradeRow> trades,
-        DateTimeOffset windowStart,
-        CancellationToken cancellationToken)
-    {
-        var windowEnd = windowStart.Add(_window);
-
-        logger.LogInformation(
-            "Se cerro la ventana {WindowStart:O} - {WindowEnd:O} con {Count} trades.",
-            windowStart,
-            windowEnd,
-            trades.Count);
-
-        await batchProcessor.ProcessBatchAsync(trades, windowStart, windowEnd, cancellationToken);
-
-        if (trades is List<TradeRow> tradeList)
+        async Task FlushExpiredWindowsAsync(DateTimeOffset now, CancellationToken flushCancellationToken)
         {
-            tradeList.Clear();
+            while (nextWindowStartToFlush.HasValue &&
+                   nextWindowStartToFlush.Value.Add(_window).Add(_allowedLateness) <= now)
+            {
+                var windowStart = nextWindowStartToFlush.Value;
+                await FlushWindowAsync(windowStart, flushCancellationToken);
+                lastFlushedWindowStart = windowStart;
+                nextWindowStartToFlush = windowStart.Add(_window);
+
+                if (windows.Count == 0 && latestObservedWindowStart.HasValue && nextWindowStartToFlush > latestObservedWindowStart.Value)
+                {
+                    nextWindowStartToFlush = null;
+                }
+            }
+        }
+
+        async Task FlushRemainingWindowsAsync(CancellationToken flushCancellationToken)
+        {
+            if (!nextWindowStartToFlush.HasValue)
+            {
+                return;
+            }
+
+            var finalWindowStart = windows.Count > 0
+                ? windows.Keys.Max()
+                : nextWindowStartToFlush.Value;
+
+            while (nextWindowStartToFlush.HasValue && nextWindowStartToFlush.Value <= finalWindowStart)
+            {
+                var windowStart = nextWindowStartToFlush.Value;
+                await FlushWindowAsync(windowStart, flushCancellationToken);
+                lastFlushedWindowStart = windowStart;
+                nextWindowStartToFlush = windowStart.Add(_window);
+            }
+
+            nextWindowStartToFlush = null;
+        }
+
+        async Task FlushWindowAsync(DateTimeOffset windowStart, CancellationToken flushCancellationToken)
+        {
+            var windowEnd = windowStart.Add(_window);
+
+            if (!windows.Remove(windowStart, out var trades) || trades.Count == 0)
+            {
+                logger.LogWarning(
+                    "No hubo trades para la ventana {WindowStart:O} - {WindowEnd:O}.",
+                    windowStart,
+                    windowEnd);
+                return;
+            }
+
+            logger.LogInformation(
+                "Se cerro la ventana {WindowStart:O} - {WindowEnd:O} con {Count} trades.",
+                windowStart,
+                windowEnd,
+                trades.Count);
+
+            await batchProcessor.ProcessBatchAsync(trades, windowStart, windowEnd, flushCancellationToken);
         }
     }
 

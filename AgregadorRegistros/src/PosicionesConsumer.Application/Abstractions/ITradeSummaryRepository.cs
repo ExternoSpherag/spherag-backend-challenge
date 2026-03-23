@@ -4,5 +4,5 @@ namespace PosicionesConsumer.Application.Abstractions;
 
 public interface ITradeSummaryRepository
 {
-    Task SaveAsync(TradeSummary tradeSummary, CancellationToken cancellationToken);
+    Task<bool> SaveAsync(TradeSummary tradeSummary, CancellationToken cancellationToken);
 }
